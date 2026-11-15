@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bazar keywords</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body data-source="hudebnibazar">
+  <header class="band">
+    <div class="band-inner">
+      <a class="band-home" href="/">All watchlists</a>
+      <h1>Hudební bazar</h1>
+      <p class="band-sub">What to search for in each category, and what to leave out</p>
+      <div class="band-actions">
+        <button id="refresh" class="btn-refresh" type="button">Scan new ads everywhere</button>
+        <p id="job" class="last-run" aria-live="polite"></p>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Pages">
+    <div class="tabs-list">
+      <a class="tabs-page" href="/hudebnibazar/">Results</a>
+      <a class="tabs-page" href="/hudebnibazar/keywords" aria-current="page">Keywords</a>
+    </div>
+  </nav>
+
+  <main class="panel kw-panel">
+    <div class="kw-help">
+      <p>Scans read a category's listing and keep every ad. Keywords are matched against the ad titles from the latest scans, ignoring case and accents, so a new keyword shows its ads straight away.
+        A keyword's words can appear in any order. With a price limit set, ads without a price (cena dohodou) are left out.</p>
+      <p><b>Scan new ads</b> reads only what was posted since the category's last scan. <b>Full scan</b> reads every page and also finds sold ads and price changes.
+        Every hour each category gets a new-ads scan (plus a full scan once a day), and every ad you watch, wait on or haven't decided on yet is opened to check its price and whether it was sold.</p>
+    </div>
+    <div id="groups"></div>
+  </main>
+
+  <div id="toast" class="toast" role="status" hidden>
+    <span class="toast-text"></span>
+    <button type="button" class="toast-undo">Undo</button>
+  </div>
+
+  <script src="/static/watchlist.js"></script>
+  <script src="/static/hudebnibazar/keywords.js"></script>
+</body>
+</html>

@@ -1,19 +1,10 @@
-"""SQLite storage for scraped ads and the user's watch decisions."""
+"""SQLite storage for kytary.cz boutique ads and the user's watch decisions."""
 
 import os
-import sqlite3
-from contextlib import contextmanager
-from datetime import datetime
 
-DB_PATH = os.environ.get("KYTARY_DB", os.path.join(os.path.dirname(__file__), "kytary.db"))
+from .common import BASE_DIR, STATUSES, connect as _connect, now, price_stats
 
-# status values:
-#   new    - seen but not decided yet
-#   watch  - watched until the user changes it
-#   price  - watched, shown only when price drops under target_price
-#   ignore - "don't watch" (archive)
-#   sold   - no longer on the site (or moved here by the user)
-STATUSES = {"new", "watch", "price", "ignore", "sold"}
+DB_PATH = os.environ.get("KYTARY_DB", os.path.join(BASE_DIR, "kytary.db"))
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS ads (
@@ -39,6 +30,7 @@ CREATE TABLE IF NOT EXISTS price_history (
     price_czk INTEGER,
     seen_at   TEXT
 );
+CREATE INDEX IF NOT EXISTS price_history_ad ON price_history (ad_id, seen_at);
 CREATE TABLE IF NOT EXISTS runs (
     run_at   TEXT,
     found    INTEGER,
@@ -48,21 +40,8 @@ CREATE TABLE IF NOT EXISTS runs (
 """
 
 
-def now() -> str:
-    return datetime.now().isoformat(timespec="seconds")
-
-
-@contextmanager
 def connect():
-    """Open a connection, commit on success, and always close it."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    try:
-        conn.executescript(SCHEMA)
-        with conn:
-            yield conn
-    finally:
-        conn.close()
+    return _connect(DB_PATH, SCHEMA)
 
 
 def sync(ads: list[dict]) -> dict:
@@ -123,7 +102,9 @@ def sync(ads: list[dict]) -> dict:
 
 def list_ads() -> list[dict]:
     with connect() as conn:
-        return [dict(row) for row in conn.execute("SELECT * FROM ads ORDER BY first_seen DESC, rowid")]
+        stats = price_stats(conn)
+        return [{**dict(row), **stats.get(row["id"], {})}
+                for row in conn.execute("SELECT * FROM ads ORDER BY first_seen DESC, rowid")]
 
 
 def last_run() -> dict | None:

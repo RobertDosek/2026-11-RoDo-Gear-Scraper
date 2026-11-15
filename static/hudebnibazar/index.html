@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hudební bazar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body data-source="hudebnibazar">
+  <header class="band">
+    <div class="band-inner">
+      <a class="band-home" href="/">All watchlists</a>
+      <h1>Hudební bazar</h1>
+      <p class="band-sub">Ads on hudebnibazar.cz that match your keywords</p>
+      <div class="band-actions">
+        <div class="band-buttons">
+          <button id="recheck" class="btn-refresh btn-refresh-quiet" type="button">Check my ads</button>
+          <button id="refresh" class="btn-refresh" type="button">Scan new ads</button>
+        </div>
+        <p id="last-run" class="last-run" aria-live="polite"></p>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Lists">
+    <div role="tablist" class="tabs-list">
+      <button role="tab" aria-controls="panel" data-tab="watching" aria-selected="true">Watching <span class="count"></span></button>
+      <button role="tab" aria-controls="panel" data-tab="waiting" aria-selected="false">Waiting for price drop <span class="count"></span></button>
+      <button role="tab" aria-controls="panel" data-tab="ignore" aria-selected="false">Not watching <span class="count"></span></button>
+      <button role="tab" aria-controls="panel" data-tab="sold" aria-selected="false">Sold <span class="count"></span></button>
+    </div>
+    <a class="tabs-link" href="/hudebnibazar/keywords">Keywords</a>
+  </nav>
+
+  <div class="filters" id="filters" role="group" aria-label="Category"></div>
+
+  <main id="panel" role="tabpanel" class="panel"></main>
+
+  <div id="toast" class="toast" role="status" hidden>
+    <span class="toast-text"></span>
+    <button type="button" class="toast-undo">Undo</button>
+  </div>
+
+  <template id="row-tpl">
+    <article class="ad">
+      <a class="ad-thumb" target="_blank" rel="noopener"><img alt="" loading="lazy"></a>
+      <div class="ad-info">
+        <h3 class="ad-name"><a target="_blank" rel="noopener"><span class="ad-brand"></span> <span class="ad-model"></span></a></h3>
+        <p class="ad-meta"></p>
+        <p class="ad-tags"></p>
+      </div>
+      <div class="ad-price">
+        <span class="price-now"></span>
+        <span class="price-was"></span>
+        <span class="ad-avail"></span>
+      </div>
+      <div class="ad-controls"></div>
+    </article>
+  </template>
+
+  <script src="/static/watchlist.js"></script>
+  <script src="/static/hudebnibazar/app.js"></script>
+</body>
+</html>
