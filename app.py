@@ -3,7 +3,10 @@
     /                         main page
     /kytary-boutique/         kytary.cz boutique guitars
     /hudebnibazar/            hudebnibazar.cz ads found by your keywords
-    /hudebnibazar/keywords    keywords, excluded words and price limits per category, and scans
+    /hudebnibazar/keywords    keywords, excluded words and price limits per category, direct alerts, and scans
+
+The app also runs the direct level (scrapers/direct.py): frequent scans of categories with direct
+keywords, phone alerts through Telegram and the timer for automatic answers.
 """
 
 import os
@@ -11,7 +14,7 @@ import threading
 
 from flask import Flask, abort, jsonify, request, send_from_directory
 
-from scrapers import hudebnibazar, hudebnibazar_db, kytary_boutique, kytary_boutique_db
+from scrapers import direct, hudebnibazar, hudebnibazar_db, kytary_boutique, kytary_boutique_db, hb_reply, telegram
 from scrapers.common import log_to_file_if_windowless
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
@@ -146,9 +149,15 @@ class ScanQueue:
                     self.state["results"] = self.state["results"] + result
             except Exception as e:  # keep going with the rest of the queue
                 self._set(error=str(e))
+            try:
+                direct.evaluate()  # new matches for the direct level go to the phone right away
+            except Exception as e:
+                print(f"Direct alerts failed: {e}")
 
 
 hb_scans = ScanQueue()
+direct_worker = direct.Worker(scan=lambda groups: hb_scans.add(groups, "new"),
+                              idle=lambda: not hb_scans.snapshot()["running"])
 
 
 @app.get("/api/hudebnibazar/ads")
@@ -235,6 +244,38 @@ def hb_delete_keyword(keyword_id: int):
     return "", 204
 
 
+def _direct_state() -> dict:
+    ready, reason = hb_reply.ready()
+    return {"settings": hudebnibazar_db.get_settings(), "modes": hudebnibazar_db.DIRECT_MODES,
+            "telegram": telegram.configured(), "can_send": ready, "send_reason": reason,
+            "events": hudebnibazar_db.recent_events(10)}
+
+
+@app.get("/api/hudebnibazar/direct")
+def hb_direct():
+    return jsonify(_direct_state())
+
+
+@app.put("/api/hudebnibazar/direct")
+def hb_set_direct():
+    try:
+        hudebnibazar_db.set_settings(request.get_json(force=True) or {})
+    except (ValueError, TypeError) as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify(_direct_state())
+
+
+@app.post("/api/hudebnibazar/direct/test")
+def hb_direct_test():
+    if not telegram.configured():
+        abort(400, "Telegram is not set up: add TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID to .env and restart the app.")
+    try:
+        telegram.send("👋 Test from the gear scraper. Direct alerts will arrive here.\n\n" + direct.status_text())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
+    return jsonify({"ok": True})
+
+
 @app.errorhandler(400)
 @app.errorhandler(404)
 @app.errorhandler(409)
@@ -244,5 +285,8 @@ def json_error(e):
 
 if __name__ == "__main__":
     log_to_file_if_windowless("app")
+    debug = os.environ.get("FLASK_DEBUG") == "1"
+    if not debug or os.environ.get("WERKZEUG_RUN_MAIN"):  # the debug reloader would start it twice
+        direct_worker.start()
     # Debug only when asked for: the always-on scheduled instance must not run the debugger.
-    app.run(host="127.0.0.1", port=int(os.environ.get("PORT", "5000")), debug=os.environ.get("FLASK_DEBUG") == "1")
+    app.run(host="127.0.0.1", port=int(os.environ.get("PORT", "5000")), debug=debug)

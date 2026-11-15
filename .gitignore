@@ -21,5 +21,6 @@ guitars.csv
 
 # Secrets / OS junk
 .env
+!.env.example
 .DS_Store
 Thumbs.db

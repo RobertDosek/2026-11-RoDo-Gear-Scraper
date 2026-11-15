@@ -106,7 +106,7 @@ async function startScan(group, mode) {
 function headerRow() {
   const r = el("div", "kw-row kw-head");
   r.setAttribute("aria-hidden", "true");
-  ["Look for in title", "Leave out titles with", "Price from", "Price to", "Matching ads", ""].forEach((t) => r.append(el("span", null, t)));
+  ["Look for in title", "Leave out titles with", "Price from", "Price to", "Matching ads", "Direct", "Prepared answer", ""].forEach((t) => r.append(el("span", null, t)));
   return r;
 }
 
@@ -126,7 +126,58 @@ function fields(k, labelled) {
   const excl = make("excl", "Leave out titles with", { type: "text", value: (k?.excludes ?? []).join(", "), placeholder: "e.g. Jazzmaster, Squier", autocomplete: "off" });
   const min = make("min", "Price from (Kč)", { type: "number", min: 0, step: 1, inputMode: "numeric", value: k?.min_price ?? "", placeholder: "Kč" });
   const max = make("max", "Price to (Kč)", { type: "number", min: 0, step: 1, inputMode: "numeric", value: k?.max_price ?? "", placeholder: "Kč" });
-  return { phrase, excl, min, max };
+  return { phrase, excl, min, max, direct: directCell(k, n, labelled), answer: answerCell(k, labelled) };
+}
+
+/* Left of the row: is the keyword direct (phone alert) or browser only, and is that price based? */
+function directCell(k, n, labelled) {
+  const cell = el("div", "kw-direct");
+  const check = (text, checked) => {
+    const lab = el("label", "kw-check");
+    const box = el("input");
+    box.type = "checkbox";
+    box.checked = checked;
+    lab.append(box, el("span", null, text));
+    return { lab, box };
+  };
+  const on = check("Direct", (k?.direct ?? "off") !== "off");
+  on.box.id = `kw-direct-${n}`;
+  on.box.setAttribute("aria-label", "Direct: also send new matches to the phone");
+  const byPrice = check("Price based", k?.direct === "price");
+  const priceLab = el("label", "kw-field kw-direct-price");
+  priceLab.append(el("span", "kw-label visually-hidden", "Direct only up to (Kč)"));
+  const price = el("input");
+  Object.assign(price, { type: "number", min: 0, step: 1, inputMode: "numeric", value: k?.direct_max_price ?? "", placeholder: "up to Kč" });
+  priceLab.append(price);
+
+  const sync = () => {
+    byPrice.lab.hidden = !on.box.checked;
+    priceLab.hidden = !(on.box.checked && byPrice.box.checked);
+    price.required = !priceLab.hidden;
+    cell.closest(".kw-row")?.classList.toggle("is-direct", on.box.checked);
+  };
+  on.box.addEventListener("change", sync);
+  byPrice.box.addEventListener("change", () => { sync(); if (byPrice.box.checked) price.focus(); });
+  if (labelled) cell.append(el("span", "kw-label", "Direct"));
+  cell.append(on.lab, byPrice.lab, priceLab);
+  queueMicrotask(sync);
+  return {
+    wrap: cell, price, sync,
+    value: () => (!on.box.checked ? "off" : byPrice.box.checked ? "price" : "always"),
+  };
+}
+
+/* Right of the row: the answer this keyword's sellers get. */
+function answerCell(k, labelled) {
+  const wrap = el("label", "kw-field kw-answer");
+  wrap.append(el("span", labelled ? "kw-label" : "kw-label visually-hidden", "Prepared answer"));
+  const input = el("textarea");
+  input.rows = 2;
+  input.value = k?.reply_text ?? "";
+  input.placeholder = "Prepared answer for the seller, e.g. Dobrý den, mám zájem o {title} za {price}…";
+  input.title = "Fill-ins: {title} {price} {url} {location} {seller}. Empty = alert only, no answer.";
+  wrap.append(input);
+  return { wrap, input };
 }
 
 function payload(f) {
@@ -135,6 +186,9 @@ function payload(f) {
     excludes: splitWords(f.excl.input.value),
     min_price: priceValue(f.min.input),
     max_price: priceValue(f.max.input),
+    direct: f.direct.value(),
+    direct_max_price: priceValue(f.direct.price),
+    reply_text: f.answer.input.value,
   };
 }
 
@@ -144,7 +198,7 @@ function keywordRow(k, g) {
   form.dataset.id = k.id;
   const f = fields(k, false);
   f.phrase.input.required = true;
-  form.append(f.phrase.wrap, f.excl.wrap, f.min.wrap, f.max.wrap, resultCell(k, g));
+  form.append(f.phrase.wrap, f.excl.wrap, f.min.wrap, f.max.wrap, resultCell(k, g), f.direct.wrap, f.answer.wrap);
 
   const actions = el("div", "kw-actions");
   const save = el("button", "btn-plain btn-save", "Save");
@@ -174,7 +228,7 @@ function keywordRow(k, g) {
     await api(`${KW_API}/${k.id}`, { method: "DELETE" });
     await load();
     showToast(`Deleted “${k.phrase}”.`, async () => {
-      await api(KW_API, { method: "POST", body: JSON.stringify({ group_slug: k.group_slug, phrase: k.phrase, excludes: k.excludes, min_price: k.min_price, max_price: k.max_price }) });
+      await api(KW_API, { method: "POST", body: JSON.stringify({ group_slug: k.group_slug, phrase: k.phrase, excludes: k.excludes, min_price: k.min_price, max_price: k.max_price, direct: k.direct, direct_max_price: k.direct_max_price, reply_text: k.reply_text }) });
       await load();
     });
   });
@@ -202,7 +256,7 @@ function addRow(g, isFirst) {
   const add = el("button", "btn-plain", "Add keyword");
   add.type = "submit";
   actions.append(add);
-  form.append(f.phrase.wrap, f.excl.wrap, f.min.wrap, f.max.wrap, el("div", "kw-result"), actions);
+  form.append(f.phrase.wrap, f.excl.wrap, f.min.wrap, f.max.wrap, el("div", "kw-result"), f.direct.wrap, f.answer.wrap, actions);
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     try {
@@ -281,5 +335,97 @@ async function refreshData(job) {
 }
 
 refreshBtn.addEventListener("click", () => startScan(null, "new"));
+
+/* ---------- direct alerts: global mode and settings ---------- */
+
+const DIRECT_API = "/api/hudebnibazar/direct";
+const MODES = {
+  away: ["Away", "Away: the prepared answer goes out at once, then you get a message."],
+  normal: ["Normal", "Normal: alert to the phone first; if you don't react, the prepared answer goes out after the delay."],
+  hunting: ["Hunting", "Hunting: alert to the phone only, you call or answer yourself."],
+  off: ["Off", "Off: nothing goes to the phone, direct keywords show in the browser like the others."],
+};
+const STATE_TEXT = {
+  muted: "came while off", notified: "alert sent", waiting: "answer waiting", sending: "sending…",
+  replied: "answered", dry_run: "dry run (not sent)", skipped: "skipped", failed: "failed",
+};
+const directForm = document.getElementById("direct-form");
+
+function renderDirect(d) {
+  const s = d.settings;
+  const status = document.getElementById("direct-status");
+  const parts = [d.telegram ? "Telegram connected" : "Telegram not set up"];
+  parts.push(s.dry_run ? "dry run" : d.can_send ? "answers are sent" : "answers can't be sent yet");
+  status.textContent = parts.join(" · ");
+  status.title = !s.dry_run && !d.can_send ? d.send_reason : "";
+  status.classList.toggle("is-warn", !d.telegram || (!s.dry_run && !d.can_send));
+
+  const box = document.getElementById("direct-modes");
+  box.replaceChildren(...d.modes.map((m) => {
+    const b = el("button", "direct-mode", MODES[m][0]);
+    b.type = "button";
+    b.dataset.mode = m;
+    b.setAttribute("role", "radio");
+    b.setAttribute("aria-checked", String(s.mode === m));
+    b.addEventListener("click", () => saveDirect({ mode: m }, `Mode: ${MODES[m][0]}.`));
+    return b;
+  }));
+  document.getElementById("direct-mode-text").textContent = MODES[s.mode][1];
+
+  if (!directForm.classList.contains("is-dirty")) {
+    for (const name of ["delay_minutes", "scan_minutes", "daily_cap"]) directForm.elements[name].value = s[name];
+    directForm.elements.dry_run.checked = s.dry_run;
+  }
+
+  const list = document.getElementById("direct-events");
+  list.replaceChildren(...(d.events.length ? d.events.map((e) => {
+    const li = el("li");
+    const a = el("a", null, e.title || e.ad_id);
+    a.href = e.url || "#"; a.target = "_blank"; a.rel = "noopener";
+    li.append(el("span", `direct-state is-${e.state}`, STATE_TEXT[e.state] || e.state), " ", a,
+      el("span", "direct-when", ` · ${e.phrase || ""} · ${when.format(new Date(e.created_at))}${e.error ? ` · ${e.error}` : ""}`));
+    return li;
+  }) : [el("li", "direct-when", "Nothing went direct yet.")]));
+}
+
+async function loadDirect() {
+  renderDirect(await api(DIRECT_API));
+}
+
+async function saveDirect(body, message) {
+  try {
+    const d = await api(DIRECT_API, { method: "PUT", body: JSON.stringify(body) });
+    directForm.classList.remove("is-dirty");
+    renderDirect(d);
+    showToast(message);
+  } catch (e) {
+    showToast(e.message, null, true);
+  }
+}
+
+directForm.addEventListener("input", () => directForm.classList.add("is-dirty"));
+directForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const f = directForm.elements;
+  saveDirect({
+    delay_minutes: f.delay_minutes.value, scan_minutes: f.scan_minutes.value, daily_cap: f.daily_cap.value,
+    dry_run: f.dry_run.checked,
+  }, "Direct settings saved.");
+});
+document.getElementById("direct-test").addEventListener("click", async () => {
+  try {
+    await api(`${DIRECT_API}/test`, { method: "POST" });
+    showToast("Test sent. Check Telegram.");
+  } catch (e) {
+    showToast(e.message, null, true);
+  }
+});
+
+loadDirect().catch((e) => {
+  const status = document.getElementById("direct-status");
+  status.textContent = `Direct mode could not be loaded (${e.message}). Restart the app if it was started before the update.`;
+  status.classList.add("is-warn");
+});
+setInterval(() => loadDirect().catch(() => {}), 30000);
 
 load().catch((e) => showToast(`Could not load keywords: ${e.message}`, null, true));

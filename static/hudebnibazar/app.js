@@ -4,6 +4,12 @@ let groupNames = {};
 let category = "all";
 let groupList = [];
 
+// What happened to an ad on the direct level (phone alert / automatic answer).
+const DIRECT_TEXT = {
+  muted: "direct (mode was off)", notified: "sent to phone", waiting: "answer waiting", sending: "sending answer",
+  replied: "answered", dry_run: "answer (dry run)", skipped: "skipped", failed: "answer failed",
+};
+
 const list = createWatchlist({
   api: "/api/hudebnibazar",
   siteName: "hudebnibazar.cz",
@@ -14,7 +20,8 @@ const list = createWatchlist({
     name: ad.title,
     lead: ad.title,
     meta: [category === "all" ? ad.groups.map((g) => groupNames[g]).join(", ") : null, ad.location, ad.seller],
-    tags: ad.keywords.map((k) => k.phrase),
+    tags: [...(ad.direct ? [{ text: `⚡ ${DIRECT_TEXT[ad.direct.state] || ad.direct.state}`, cls: "tag-direct" }] : []),
+      ...ad.keywords.map((k) => k.phrase)],
     avail: ad.posted ? `Posted ${ad.posted}` : "",
     noPrice: ad.price_text || "No price",
   }),
@@ -112,3 +119,26 @@ refreshBtn.addEventListener("click", async () => {
 });
 
 list.load().catch((e) => showToast(`Could not load ads: ${e.message}`, null, true));
+
+/* Background scans (the hourly task and the quick direct scans) add ads while the page is open, so
+   look for them quietly: every minute while the tab is visible, and when you come back to it.
+   Skipped while you're typing (a note, a target price) so a refresh never eats your input. */
+const AUTO_REFRESH_MS = 60_000;
+let lastRefresh = Date.now();
+
+async function autoRefresh() {
+  if (document.hidden || polling) return;
+  const typing = document.activeElement?.closest?.("#panel input, #panel textarea, #panel select");
+  if (typing) return;
+  lastRefresh = Date.now();
+  try {
+    const job = await api("/api/hudebnibazar/job");
+    if (!job.running) await list.load();   // mid-scan: wait for the next round, no toast spam
+    else lastRefresh = 0;
+  } catch { /* the app may be restarting; try again next time */ }
+}
+
+setInterval(autoRefresh, AUTO_REFRESH_MS);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && Date.now() - lastRefresh > 15_000) autoRefresh();
+});

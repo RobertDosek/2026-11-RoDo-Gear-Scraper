@@ -8,6 +8,24 @@ from contextlib import contextmanager
 from datetime import datetime
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def load_env(path: str = os.path.join(BASE_DIR, ".env")) -> None:
+    """Read KEY=value lines from .env (secrets such as the Telegram token) into os.environ.
+    Values already set in the environment win. The file is git-ignored."""
+    if not os.path.exists(path):
+        return
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+load_env()
+
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
 # Ad status values shared by every watchlist:

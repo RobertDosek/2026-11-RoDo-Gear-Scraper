@@ -49,7 +49,32 @@ CREATE TABLE IF NOT EXISTS keywords (
     excludes    TEXT NOT NULL DEFAULT '[]',
     min_price   INTEGER,
     max_price   INTEGER,
-    created_at  TEXT
+    created_at  TEXT,
+    direct           TEXT NOT NULL DEFAULT 'off',
+    direct_max_price INTEGER,
+    reply_text       TEXT,
+    direct_since     TEXT
+);
+-- Global settings of the direct level (mode, delays, default reply).
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+);
+-- One row per ad that went to the direct level. An ad goes direct at most once, ever.
+CREATE TABLE IF NOT EXISTS direct_events (
+    ad_id         TEXT PRIMARY KEY,
+    keyword_id    INTEGER,
+    created_at    TEXT NOT NULL,
+    mode          TEXT,
+    price_czk     INTEGER,
+    phone         TEXT,
+    state         TEXT NOT NULL,
+    reply_due_at  TEXT,
+    replied_at    TEXT,
+    reply_text    TEXT,
+    auto          INTEGER NOT NULL DEFAULT 0,
+    error         TEXT,
+    tg_message_id INTEGER
 );
 CREATE TABLE IF NOT EXISTS ads (
     id             TEXT PRIMARY KEY,
@@ -115,6 +140,11 @@ def migrate() -> None:
             conn.execute("ALTER TABLE ads ADD COLUMN posted_at TEXT")
         if "note" not in columns:
             conn.execute("ALTER TABLE ads ADD COLUMN note TEXT")
+        kw_columns = {r[1] for r in conn.execute("PRAGMA table_info(keywords)")}
+        for name, ddl in (("direct", "TEXT NOT NULL DEFAULT 'off'"), ("direct_max_price", "INTEGER"),
+                          ("reply_text", "TEXT"), ("direct_since", "TEXT")):
+            if name not in kw_columns:
+                conn.execute(f"ALTER TABLE keywords ADD COLUMN {name} {ddl}")
         # Every ad needs at least one category, or full scans never look at it again. Only fill in
         # ads with none, so categories an ad really left are not added back.
         conn.execute("INSERT OR IGNORE INTO ad_groups SELECT id, group_slug, last_seen FROM ads "
@@ -161,9 +191,21 @@ def passes(ad: dict, keyword: dict) -> bool:
 
 # ---------- keywords ----------
 
+KEYWORD_FIELDS = ("id", "group_slug", "phrase", "excludes", "min_price", "max_price", "created_at",
+                  "direct", "direct_max_price", "reply_text", "direct_since")
+
+# Per keyword: does a match also go to the direct level (phone alert / automatic reply)?
+#   off    - browser only
+#   always - every new match
+#   price  - only matches priced at or under direct_max_price
+DIRECT_CHOICES = ("off", "always", "price")
+REPLY_MAX = 2000
+
+
 def _keyword(row) -> dict:
-    kw = {k: row[k] for k in ("id", "group_slug", "phrase", "excludes", "min_price", "max_price", "created_at")}
+    kw = {k: row[k] for k in KEYWORD_FIELDS}
     kw["excludes"] = json.loads(kw["excludes"] or "[]")
+    kw["direct"] = kw["direct"] or "off"
     return kw
 
 
@@ -191,7 +233,30 @@ def _clean_keyword(data: dict) -> dict:
     lo, hi = price("min_price"), price("max_price")
     if lo is not None and hi is not None and lo > hi:
         raise ValueError("The minimum price is higher than the maximum.")
-    return {"group_slug": group, "phrase": phrase, "excludes": excludes, "min_price": lo, "max_price": hi}
+
+    direct = data.get("direct") or "off"
+    if direct not in DIRECT_CHOICES:
+        raise ValueError(f"Unknown direct setting: {direct}")
+    direct_max = price("direct_max_price")
+    if direct == "price" and direct_max is None:
+        raise ValueError("Enter the price for the direct alert (e.g. 6500).")
+    reply = (data.get("reply_text") or "").strip()
+    if len(reply) > REPLY_MAX:
+        raise ValueError(f"The prepared answer can be at most {REPLY_MAX} characters.")
+    return {"group_slug": group, "phrase": phrase, "excludes": excludes, "min_price": lo, "max_price": hi,
+            "direct": direct, "direct_max_price": direct_max if direct == "price" else None,
+            "reply_text": reply or None}
+
+
+def _direct_since(old: dict | None, kw: dict) -> str | None:
+    """When the keyword's direct alert started. Only ads that are new (or drop in price) after this go
+    direct, so switching it on doesn't fire for every ad already on the list."""
+    if kw["direct"] == "off":
+        return None
+    if old and old["direct"] == kw["direct"] and old["direct_max_price"] == kw["direct_max_price"] \
+            and old["phrase"] == kw["phrase"] and old["excludes"] == kw["excludes"] and old["direct_since"]:
+        return old["direct_since"]
+    return now()
 
 
 def _load_ads(conn, where: str = "", args=()) -> list[dict]:
@@ -232,10 +297,11 @@ def add_keyword(data: dict) -> dict:
     kw = _clean_keyword(data)
     with connect() as conn:
         cur = conn.execute(
-            "INSERT INTO keywords (group_slug, phrase, excludes, min_price, max_price, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO keywords (group_slug, phrase, excludes, min_price, max_price, created_at, "
+            "direct, direct_max_price, reply_text, direct_since) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (kw["group_slug"], kw["phrase"], json.dumps(kw["excludes"], ensure_ascii=False),
-             kw["min_price"], kw["max_price"], now()),
+             kw["min_price"], kw["max_price"], now(),
+             kw["direct"], kw["direct_max_price"], kw["reply_text"], _direct_since(None, kw)),
         )
         keyword_id = cur.lastrowid
     return get_keyword(keyword_id)
@@ -248,9 +314,11 @@ def update_keyword(keyword_id: int, data: dict) -> dict | None:
     kw = _clean_keyword({**old, **data})
     with connect() as conn:
         conn.execute(
-            "UPDATE keywords SET group_slug=?, phrase=?, excludes=?, min_price=?, max_price=? WHERE id=?",
+            "UPDATE keywords SET group_slug=?, phrase=?, excludes=?, min_price=?, max_price=?, "
+            "direct=?, direct_max_price=?, reply_text=?, direct_since=? WHERE id=?",
             (kw["group_slug"], kw["phrase"], json.dumps(kw["excludes"], ensure_ascii=False),
-             kw["min_price"], kw["max_price"], keyword_id),
+             kw["min_price"], kw["max_price"],
+             kw["direct"], kw["direct_max_price"], kw["reply_text"], _direct_since(old, kw), keyword_id),
         )
     return get_keyword(keyword_id)
 
@@ -433,11 +501,14 @@ def list_ads() -> list[dict]:
     with connect() as conn:
         keywords = _all_keywords(conn)
         ads = _load_ads(conn)
+        events = {r["ad_id"]: dict(r) for r in conn.execute(
+            "SELECT ad_id, state, created_at, replied_at, auto, error FROM direct_events")}
     out = []
     for ad in ads:
         hits = [kw for kw in keywords if matches(ad, kw) and passes(ad, kw)]
         if hits or ad["status"] in ("watch", "price"):
             ad["keywords"] = [{"id": kw["id"], "phrase": kw["phrase"]} for kw in hits]
+            ad["direct"] = events.get(ad["id"])
             out.append(ad)
     return out
 
@@ -469,3 +540,168 @@ def update_ad(ad_id: str, status: str, target_price: int | None = None) -> dict 
             (status, target_price, status, now(), ad_id),
         )
     return next((ad for ad in list_ads() if ad["id"] == ad_id), None)
+
+
+# ---------- direct level: settings and events ----------
+
+# Global direct mode:
+#   away    - the prepared answer is sent straight away, then you get a message
+#   normal  - you get a phone alert; if you don't react within delay_minutes the answer is sent
+#   hunting - phone alert only; you call or answer yourself
+#   off     - nothing goes direct (the ads still show in the browser)
+DIRECT_MODES = ("away", "normal", "hunting", "off")
+
+SETTING_DEFAULTS = {
+    "mode": "hunting",          # see DIRECT_MODES
+    "delay_minutes": 5,         # normal mode: wait this long for you before answering automatically
+    "scan_minutes": 3,          # how often categories with direct keywords are scanned for new ads
+    "daily_cap": 5,             # at most this many automatic answers per day
+    "dry_run": True,            # answers are only shown in Telegram, not sent to the seller
+}
+# The prepared answer belongs to each keyword (keywords.reply_text); there is no global one.
+
+# State of a direct event:
+#   muted    - came in while the mode was off; stays in the browser only
+#   notified - you got the alert and decide yourself
+#   waiting  - normal mode: the answer goes out at reply_due_at unless you react
+#   sending  - being sent right now
+#   replied  - the answer was sent to the seller
+#   dry_run  - the answer would have been sent (dry run)
+#   skipped  - you chose to skip it
+#   failed   - sending failed (see error)
+NEW_AD_AGE = timedelta(days=2)
+
+EVENT_STATES = ("muted", "notified", "waiting", "sending", "replied", "dry_run", "skipped", "failed")
+
+
+def get_settings() -> dict:
+    with connect() as conn:
+        stored = {r["key"]: json.loads(r["value"]) for r in conn.execute("SELECT key, value FROM settings")}
+    return {**SETTING_DEFAULTS, **{k: v for k, v in stored.items() if k in SETTING_DEFAULTS}}
+
+
+def set_settings(data: dict) -> dict:
+    clean = {}
+    for key, value in data.items():
+        if key not in SETTING_DEFAULTS:
+            continue
+        if key == "mode":
+            if value not in DIRECT_MODES:
+                raise ValueError(f"Unknown mode: {value}")
+        elif key in ("delay_minutes", "scan_minutes", "daily_cap"):
+            value = int(value)
+            low = 0 if key == "daily_cap" else 1
+            if not low <= value <= 1440:
+                raise ValueError(f"{key.replace('_', ' ').capitalize()} must be between {low} and 1440.")
+        elif key == "dry_run":
+            value = bool(value)
+        clean[key] = value
+    with connect() as conn:
+        for key, value in clean.items():
+            conn.execute("INSERT OR REPLACE INTO settings VALUES (?, ?)", (key, json.dumps(value, ensure_ascii=False)))
+    return get_settings()
+
+
+def direct_candidates() -> list[tuple[dict, dict]]:
+    """(ad, keyword) pairs that should go to the direct level now: listed, not marked "don't watch",
+    matched by a keyword with a direct alert, passing its filters and direct condition, new or
+    changed in price since the alert was set up, and never sent direct before."""
+    with connect() as conn:
+        keywords = [kw for kw in _all_keywords(conn) if kw["direct"] != "off" and kw["direct_since"]]
+        if not keywords:
+            return []
+        done = {r[0] for r in conn.execute("SELECT ad_id FROM direct_events")}
+        # Last price change (the first history row is just the price the ad was found with).
+        changed = dict(conn.execute("SELECT ad_id, MAX(seen_at) FROM price_history GROUP BY ad_id "
+                                    "HAVING COUNT(*) > 1").fetchall())
+        ads = _load_ads(conn, "WHERE listed=1 AND status != 'ignore'")
+    # A first full scan of a category "finds" years-old ads; only ads really posted lately count as new.
+    recent = (datetime.now() - NEW_AD_AGE).isoformat(timespec="seconds")
+    out = []
+    for ad in ads:
+        if ad["id"] in done:
+            continue
+        for kw in keywords:
+            if not (matches(ad, kw) and passes(ad, kw)):
+                continue
+            if kw["direct"] == "price" and (ad["price_czk"] is None or ad["price_czk"] > kw["direct_max_price"]):
+                continue
+            is_new = (ad["first_seen"] or "") >= kw["direct_since"] and (ad["posted_at"] or ad["first_seen"]) >= recent
+            dropped = (changed.get(ad["id"]) or "") >= kw["direct_since"]
+            if is_new or dropped:
+                out.append((ad, kw))
+                break
+    return out
+
+
+def claim_event(ad: dict, kw: dict, mode: str, state: str, reply_due_at: str | None = None) -> bool:
+    """Record that the ad went direct. False when it already had (another process got there first)."""
+    with connect() as conn:
+        return conn.execute(
+            "INSERT OR IGNORE INTO direct_events (ad_id, keyword_id, created_at, mode, price_czk, state, reply_due_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (ad["id"], kw["id"], now(), mode, ad["price_czk"], state, reply_due_at),
+        ).rowcount > 0
+
+
+def get_event(ad_id: str) -> dict | None:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM direct_events WHERE ad_id=?", (ad_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def update_event(ad_id: str, **fields) -> None:
+    if not fields:
+        return
+    with connect() as conn:
+        conn.execute(f"UPDATE direct_events SET {', '.join(f'{k}=?' for k in fields)} WHERE ad_id=?",
+                     (*fields.values(), ad_id))
+
+
+def set_event_state(ad_id: str, new: str, allowed: tuple[str, ...], **fields) -> bool:
+    """Move an event to a new state only if it is still in one of the allowed states. This is what stops
+    an answer from going out twice when you tap a button just as the timer runs out."""
+    with connect() as conn:
+        sets = ", ".join(["state=?"] + [f"{k}=?" for k in fields])
+        return conn.execute(
+            f"UPDATE direct_events SET {sets} WHERE ad_id=? AND state IN ({','.join('?' * len(allowed))})",
+            (new, *fields.values(), ad_id, *allowed),
+        ).rowcount > 0
+
+
+def due_events(at: str) -> list[dict]:
+    with connect() as conn:
+        return [dict(r) for r in conn.execute(
+            "SELECT * FROM direct_events WHERE state='waiting' AND reply_due_at <= ?", (at,))]
+
+
+def event_by_message(tg_message_id: int) -> dict | None:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM direct_events WHERE tg_message_id=?", (tg_message_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def auto_replies_since(since: str) -> int:
+    with connect() as conn:
+        return conn.execute("SELECT COUNT(*) FROM direct_events WHERE auto=1 AND state IN ('replied','dry_run') "
+                            "AND replied_at >= ?", (since,)).fetchone()[0]
+
+
+def recent_events(limit: int = 20) -> list[dict]:
+    with connect() as conn:
+        return [dict(r) for r in conn.execute(
+            "SELECT e.*, a.title, a.url, k.phrase FROM direct_events e "
+            "LEFT JOIN ads a ON a.id = e.ad_id LEFT JOIN keywords k ON k.id = e.keyword_id "
+            "ORDER BY e.created_at DESC LIMIT ?", (limit,))]
+
+
+def get_ad(ad_id: str) -> dict | None:
+    with connect() as conn:
+        ads = _load_ads(conn, "WHERE id=?", (ad_id,))
+    return ads[0] if ads else None
+
+
+def direct_groups() -> list[str]:
+    """Categories that have at least one keyword with a direct alert."""
+    with connect() as conn:
+        return [r[0] for r in conn.execute("SELECT DISTINCT group_slug FROM keywords WHERE direct != 'off'")]

@@ -156,6 +156,7 @@ function createWatchlist(config) {
     const gone = !ad.listed;
     node.classList.toggle("is-gone", gone);
     node.classList.toggle("is-drop", isDrop(ad) && !gone);
+    node.classList.toggle("is-direct", Boolean(ad.direct));
 
     const thumb = node.querySelector(".ad-thumb");
     thumb.href = ad.url;
@@ -170,7 +171,8 @@ function createWatchlist(config) {
     meta.replaceChildren(...(d.meta || []).filter(Boolean).map((m) => el("span", null, m)));
     const tags = node.querySelector(".ad-tags");
     if (tags) {
-      if (d.tags?.length) tags.replaceChildren(...d.tags.map((t) => el("span", "tag", t)));
+      // A tag is a string, or { text, cls } for a styled one (e.g. the direct-alert mark).
+      if (d.tags?.length) tags.replaceChildren(...d.tags.map((t) => typeof t === "string" ? el("span", "tag", t) : el("span", `tag ${t.cls}`, t.text)));
       else tags.remove();
     }
 

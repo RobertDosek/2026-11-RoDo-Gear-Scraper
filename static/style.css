@@ -517,3 +517,78 @@ button, input { font: inherit; color: inherit; }
 .ad-controls .ad-note { margin-top: 8px; }
 .ad-controls .ad-note-text, .ad-controls .ad-note textarea { max-width: none; }
 .ad-controls .ad-note textarea { min-height: 2.6em; }
+
+/* ---------- direct alerts ---------- */
+/* The keywords page gets more width: after "Matching ads" each row has the direct box and the answer. */
+.kw-panel { max-width: 1400px; }
+.kw-row { grid-template-columns: minmax(140px, 1fr) minmax(150px, 1.15fr) 92px 92px 118px 112px minmax(220px, 1.7fr) 128px; }
+
+.direct {
+  margin-top: 24px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--brass);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.direct-bar { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; }
+.direct-title { font-weight: 750; font-variation-settings: "wdth" 108; }
+.direct-modes { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.direct-mode {
+  border: 0; background: var(--paper); color: var(--ink-soft); font: inherit; font-size: .875rem; font-weight: 650;
+  padding: 6px 14px; cursor: pointer;
+}
+.direct-mode + .direct-mode { border-left: 1px solid var(--line); }
+.direct-mode:hover { color: var(--ink); }
+.direct-mode[aria-checked="true"] { background: var(--band); color: var(--band-ink); }
+.direct-mode[aria-checked="true"][data-mode="away"] { background: var(--brass); color: #fff; }
+.direct-mode[aria-checked="true"][data-mode="off"] { background: var(--ink-soft); color: #fff; }
+.direct-status { margin: 0 0 0 auto; font-size: .8125rem; color: var(--green); font-weight: 600; }
+.direct-status.is-warn { color: var(--sold); }
+.direct-help { margin: 6px 0 0; color: var(--ink-soft); font-size: .875rem; }
+.direct-more { margin-top: 8px; font-size: .875rem; }
+.direct-more summary { cursor: pointer; color: var(--ink-soft); font-weight: 600; }
+.direct-form { display: grid; grid-template-columns: repeat(3, minmax(0, 220px)); gap: 10px 14px; margin-top: 10px; align-items: end; }
+.direct-form .kw-label { display: block; font-size: .8125rem; color: var(--ink-soft); margin-bottom: 2px; }
+.direct-form input[type="number"] { width: 100%; padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); font: inherit; }
+.direct-check { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; }
+.direct-actions { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; }
+.direct-events { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.direct-when { color: var(--ink-soft); }
+.direct-state { font-size: .75rem; font-weight: 700; padding: 1px 7px; border-radius: 4px; background: var(--paper); color: var(--ink-soft); }
+.direct-state.is-replied { background: var(--green-tint); color: var(--green); }
+.direct-state.is-waiting, .direct-state.is-notified, .direct-state.is-dry_run { background: var(--brass-tint); color: var(--brass); }
+.direct-state.is-failed { color: var(--sold); }
+
+/* Direct box and prepared answer in a keyword row */
+.kw-direct { display: flex; flex-direction: column; gap: 3px; align-self: center; min-width: 0; }
+.kw-direct [hidden] { display: none; }
+.kw-check { display: flex; align-items: center; gap: 6px; font-size: .8125rem; color: var(--ink-soft); cursor: pointer; }
+.kw-check input { width: 16px; height: 16px; accent-color: var(--brass); margin: 0; }
+.kw-row.is-direct .kw-check:first-of-type { color: var(--brass); font-weight: 700; }
+.kw-direct-price input { padding: 3px 7px; font-size: .8125rem; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); width: 100%; }
+.kw-answer textarea {
+  width: 100%; padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
+  font: inherit; font-size: .8125rem; line-height: 1.35; resize: vertical; min-height: 40px;
+}
+.kw-row:not(.is-direct):not(.kw-add) .kw-answer textarea { opacity: .45; }
+.kw-row:not(.is-direct):not(.kw-add) .kw-answer textarea:focus { opacity: 1; }
+.kw-answer textarea:focus { border-color: var(--ink-soft); outline-offset: 0; }
+.kw-row.is-direct:not(.is-dirty):not(.kw-add) { box-shadow: inset 3px 0 0 var(--brass); }
+
+/* Direct mark on the results page */
+.tag.tag-direct { background: var(--brass-tint); color: var(--brass); }
+.ad.is-direct { box-shadow: inset 4px 0 0 var(--brass); }
+
+@media (max-width: 1180px) {
+  .kw-row { grid-template-columns: minmax(140px, 1fr) minmax(150px, 1.15fr) 92px 92px 118px 112px 128px; }
+  .kw-head span:nth-child(7) { display: none; }
+  .kw-answer { grid-column: 1 / -2; grid-row: 2; }
+}
+@media (max-width: 860px) {
+  .kw-row { grid-template-columns: 1fr 1fr; }
+  .kw-direct { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
+  .kw-answer { grid-column: 1 / -1; grid-row: auto; }
+  .direct-status { margin-left: 0; }
+  .direct-form { grid-template-columns: 1fr; }
+}

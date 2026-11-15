@@ -21,6 +21,7 @@ from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
 
+from . import direct
 from . import hudebnibazar_db as db
 from .common import HEADERS, parse_price
 
@@ -286,6 +287,12 @@ def main() -> None:
     r = recheck(progress=lambda m: None if m.startswith("Checking your ads") else print(m))
     print(f"  your ads: {r['checked']} checked, {r['price_changes']} price changes, {r['gone_ads']} gone"
           + (f", {r['errors']} failed" if r["errors"] else ""))
+    try:
+        sent = direct.evaluate()
+        if sent:
+            print(f"  direct alerts: {sent}")
+    except Exception as e:
+        print(f"  direct alerts failed: {e}")
     print(f"Saved to {db.DB_PATH}")
 
 

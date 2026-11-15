@@ -33,9 +33,34 @@
     <div class="kw-help">
       <p>Scans read a category's listing and keep every ad. Keywords are matched against the ad titles from the latest scans, ignoring case and accents, so a new keyword shows its ads straight away.
         A keyword's words can appear in any order. With a price limit set, ads without a price (cena dohodou) are left out.</p>
+      <p><b>Direct</b> (the box on the left of a keyword): its new matches also go to your phone, all of them or with <b>price based</b> only those up to your price. The <b>prepared answer</b> on the right is what the seller gets; without one you only get the alert.</p>
       <p><b>Scan new ads</b> reads only what was posted since the category's last scan. <b>Full scan</b> reads every page and also finds sold ads and price changes.
         Every hour each category gets a new-ads scan (plus a full scan once a day), and every ad you watch, wait on or haven't decided on yet is opened to check its price and whether it was sold.</p>
     </div>
+
+    <section id="direct" class="direct" aria-label="Direct alerts">
+      <div class="direct-bar">
+        <span class="direct-title">⚡ Direct mode</span>
+        <div id="direct-modes" class="direct-modes" role="radiogroup" aria-label="Direct mode"></div>
+        <p id="direct-status" class="direct-status"></p>
+      </div>
+      <p id="direct-mode-text" class="direct-help"></p>
+      <details class="direct-more">
+        <summary>Timing, limits and latest alerts</summary>
+        <form id="direct-form" class="direct-form">
+          <label class="kw-field"><span class="kw-label">Automatic answer after (min)</span><input name="delay_minutes" type="number" min="1" max="1440" step="1" inputmode="numeric"></label>
+          <label class="kw-field"><span class="kw-label">Scan direct categories every (min)</span><input name="scan_minutes" type="number" min="1" max="1440" step="1" inputmode="numeric"></label>
+          <label class="kw-field"><span class="kw-label">Automatic answers per day, at most</span><input name="daily_cap" type="number" min="0" max="1440" step="1" inputmode="numeric"></label>
+          <label class="direct-check"><input name="dry_run" type="checkbox"> <span><b>Dry run</b>: only show the answer in Telegram, never send it to the seller</span></label>
+          <div class="direct-actions">
+            <button type="submit" class="btn-plain">Save</button>
+            <button type="button" id="direct-test" class="btn-quiet">Send a test to Telegram</button>
+          </div>
+        </form>
+        <ul id="direct-events" class="direct-events"></ul>
+      </details>
+    </section>
+
     <div id="groups"></div>
   </main>
 
