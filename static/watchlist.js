@@ -51,7 +51,7 @@ function createWatchlist(config) {
   const rowTpl = document.getElementById("row-tpl");
   const filter = config.filter || (() => true);
 
-  const isDrop = (ad) => ad.status === "price" && ad.target_price != null && ad.price_czk != null && ad.price_czk < ad.target_price;
+  const isDrop = (ad) => ad.status === "price" && ad.target_price != null && ad.price_czk != null && ad.price_czk <= ad.target_price;
 
   function groups() {
     const g = { new: [], alerts: [], watch: [], waiting: [], ignore: [], sold: [] };
@@ -111,12 +111,12 @@ function createWatchlist(config) {
         panel.append(el("p", "empty", config.emptyText));
       } else {
         if (g.new.length) panel.append(group("New ads", "Decide what to do with each one.", g.new));
-        if (g.alerts.length) panel.append(group("Price alerts", "Under your target price, or gone from the site.", g.alerts));
+        if (g.alerts.length) panel.append(group("Price alerts", "At or under your target price, or gone from the site.", g.alerts));
         panel.append(group("Watching", null, g.watch, "Nothing watched yet. Pick Watch on an ad to keep it here."));
       }
     } else if (state.tab === "waiting") {
       panel.append(group("Waiting for a price drop",
-        "Still above your target price. They move to Price alerts on the Watching tab when the price goes under it.",
+        "Still above your target price. They move to Price alerts on the Watching tab when the price reaches it.",
         g.waiting, "No price targets set. Pick Price under… on an ad to add one."));
     } else if (state.tab === "ignore") {
       panel.append(group("Not watching", "Ads you skipped. They move to sold automatically when they leave the site.", g.ignore, "No skipped ads."));

@@ -31,7 +31,7 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 # Ad status values shared by every watchlist:
 #   new    - seen but not decided yet
 #   watch  - watched until the user changes it
-#   price  - watched, shown only when price drops under target_price
+#   price  - watched, shown only when the price drops to target_price or below
 #   ignore - "don't watch" (archive)
 #   sold   - no longer on the site (or moved here by the user)
 STATUSES = {"new", "watch", "price", "ignore", "sold"}
