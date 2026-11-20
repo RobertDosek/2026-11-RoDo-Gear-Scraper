@@ -46,6 +46,24 @@ def parse_price(text: str) -> int | None:
     return int(digits) if digits else None
 
 
+def block_text(node) -> str:
+    """Text of an HTML block with its line breaks kept (<br> becomes a new line), spaces tidied."""
+    if node is None:
+        return ""
+    for br in node.find_all("br"):
+        br.replace_with("\x00")  # line breaks in the HTML source mean nothing; only <br> does
+    lines = [" ".join(line.split()) for line in node.get_text().split("\x00")]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+
+
+def add_columns(conn, table: str, columns: dict[str, str]) -> None:
+    """Add columns that an older database file doesn't have yet."""
+    have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+    for name, ddl in columns.items():
+        if name not in have:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
+
+
 @contextmanager
 def connect(path: str, schema: str):
     """Open a connection, make sure the schema exists, commit on success, and always close it."""

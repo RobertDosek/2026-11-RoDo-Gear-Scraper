@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sold gear</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/sold/sold.css">
+</head>
+<body data-source="sold">
+  <header class="band">
+    <div class="band-inner">
+      <a class="band-home" href="/">All watchlists</a>
+      <h1>Sold</h1>
+      <p class="band-sub">Gear you watched that got sold, from every source, with the price it went for.</p>
+      <dl id="totals" class="sold-totals" aria-live="polite"></dl>
+    </div>
+  </header>
+
+  <form id="filters" class="sold-filters" role="search" aria-label="Filter sold gear">
+    <label class="sf sf-q"><span>Search</span><input type="search" name="q" placeholder="Brand, make, title, note…"></label>
+    <label class="sf"><span>Brand</span><select name="brand"><option value="">All</option></select></label>
+    <label class="sf"><span>Where sold</span><select name="where"><option value="">All</option></select></label>
+    <label class="sf sf-date"><span>Sold from</span><input type="date" name="from"></label>
+    <label class="sf sf-date"><span>to</span><input type="date" name="to"></label>
+    <label class="sf sf-num"><span>Price from</span><input type="number" name="min" min="0" step="1" inputmode="numeric" placeholder="Kč"></label>
+    <label class="sf sf-num"><span>to</span><input type="number" name="max" min="0" step="1" inputmode="numeric" placeholder="Kč"></label>
+    <label class="sf-check"><input type="checkbox" name="priced"> Only with sold price</label>
+    <button type="reset" class="btn-link">Clear filters</button>
+  </form>
+
+  <main class="sold-panel">
+    <div class="sold-scroll">
+      <table class="sold-table">
+        <thead>
+          <tr>
+            <th data-sort="sold_at" aria-sort="descending"><button type="button">Sold</button></th>
+            <th data-sort="brand"><button type="button">Brand</button></th>
+            <th data-sort="make"><button type="button">Make</button></th>
+            <th data-sort="category"><button type="button">Category</button></th>
+            <th data-sort="where_sold"><button type="button">Where sold</button></th>
+            <th data-sort="sold_price" class="num"><button type="button">Sold for</button></th>            <th data-sort="note"><button type="button">Note</button></th>
+            <th><span class="visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <p id="empty" class="empty" hidden></p>
+  </main>
+
+  <div id="preview" class="sold-preview" hidden><img alt=""></div>
+  <div id="note-preview" class="sold-note-preview" hidden></div>
+
+  <dialog id="editor" class="sold-editor">
+    <form method="dialog">
+      <h2 id="editor-title">Edit sale</h2>
+      <p class="sold-editor-ad"></p>
+      <div class="sold-editor-grid">
+        <label class="sale-field"><span class="sale-label">Brand</span><input name="brand" maxlength="200"></label>
+        <label class="sale-field"><span class="sale-label">Make</span><input name="make" maxlength="200"></label>
+        <label class="sale-field"><span class="sale-label">Sold price (Kč)</span><input name="sold_price" type="number" min="0" step="1" inputmode="numeric"></label>
+        <label class="sale-field"><span class="sale-label">Where sold</span><input name="where_sold" list="where-options" maxlength="200"></label>
+        <label class="sale-field"><span class="sale-label">Sold on</span><input name="sold_at" type="date"></label>
+        <label class="sale-field sale-note"><span class="sale-label">Note</span><textarea name="note" rows="6" maxlength="10000"></textarea></label>
+      </div>
+      <datalist id="where-options"></datalist>
+      <div class="sold-editor-actions">
+        <button type="submit" value="save" class="btn-plain">Save</button>
+        <button type="submit" value="cancel" class="btn-link" formnovalidate>Cancel</button>
+        <button type="button" class="btn-quiet btn-danger" id="delete">Remove from sold list</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" hidden>
+    <span class="toast-text"></span>
+    <button type="button" class="toast-undo">Undo</button>
+  </div>
+
+  <script src="/static/watchlist.js"></script>
+  <script src="/static/sold/app.js"></script>
+</body>
+</html>

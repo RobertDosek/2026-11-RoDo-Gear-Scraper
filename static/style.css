@@ -592,3 +592,41 @@ button, input { font: inherit; color: inherit; }
   .direct-status { margin-left: 0; }
   .direct-form { grid-template-columns: 1fr; }
 }
+
+/* ---------- "Move to sold" form in a row ---------- */
+.sale {
+  width: 100%;
+  margin-top: 4px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--sold);
+  border-radius: 8px;
+  background: var(--surface);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 10px;
+  font-size: .875rem;
+}
+.sale-title { grid-column: 1 / -1; margin: 0; font-weight: 700; }
+.sale-field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sale-label { font-size: .75rem; color: var(--ink-soft); font-weight: 600; }
+.sale input, .sale textarea {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  font: inherit;
+}
+.sale input:focus, .sale textarea:focus { border-color: var(--ink-soft); }
+.sale-sold_price input { font-variant-numeric: tabular-nums; font-weight: 700; }
+.sale-note { grid-column: 1 / -1; }
+.sale textarea { resize: vertical; }
+.sale-actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; }
+.sale .btn-save { border-color: var(--sold); color: var(--sold); }
+.sale .btn-save:hover { background: var(--sold); color: #fff; }
+
+/* ---------- main page: link to the sold list ---------- */
+[data-source="sold"] { --band: #2B2F36; --band-deep: #1B1E23; --band-ink: #F1EFEA; --band-soft: #B9BCC2; }
+[data-source="inventory"] { --band: #4A3A18; --band-deep: #2F240E; --band-ink: #F6EEDC; --band-soft: #D6C49A; }
+.source.is-small .source-name { font-size: clamp(1.75rem, 5vw, 3rem); }

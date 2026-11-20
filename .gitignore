@@ -24,3 +24,6 @@ guitars.csv
 !.env.example
 .DS_Store
 Thumbs.db
+
+# Pictures of sold gear (copied from the ads)
+sold_images/

@@ -10,7 +10,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from . import kytary_boutique_db as db
-from .common import BASE_DIR, HEADERS, log_to_file_if_windowless, parse_price
+from .common import BASE_DIR, HEADERS, block_text, log_to_file_if_windowless, parse_price
 
 START_URL = "https://kytary.cz/boutique/boutique-kytary/"
 OUTPUT_CSV = os.path.join(BASE_DIR, "guitars.csv")
@@ -59,6 +59,37 @@ def scrape(start_url: str = START_URL) -> list[dict]:
     return guitars
 
 
+def parse_description(html: str) -> str:
+    """The "Popis produktu" text from a guitar's own page."""
+    box = BeautifulSoup(html, "html.parser").select_one("#pdp-desc")
+    if box is None:
+        return ""
+    for extra in box.select(".head3, .pdp-descrating"):
+        extra.decompose()
+    return block_text(box)
+
+
+def fill_descriptions(ad_ids: list[str] | None = None) -> int:
+    """Save the description of guitars you watch while their page is still up. Runs when you pick
+    Watch / Price under... and after each hourly run for anything missed."""
+    session = requests.Session()
+    session.headers.update(HEADERS)
+    saved = 0
+    for ad in db.ads_missing_description(ad_ids):
+        try:
+            response = session.get(ad["url"], timeout=30)
+            response.raise_for_status()
+            text = parse_description(response.text)
+        except Exception as e:
+            print(f"Could not load the description of {ad['id']}: {e}")
+            continue
+        if text:
+            db.set_description(ad["id"], text)
+            saved += 1
+        time.sleep(1)  # be polite
+    return saved
+
+
 def main() -> None:
     print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] Starting scrape")
     guitars = scrape()
@@ -69,6 +100,9 @@ def main() -> None:
     result = db.sync(guitars)
     print(f"Found {result['found']} guitars: {result['new_ads']} new, {result['gone_ads']} gone. "
           f"Saved to {db.DB_PATH} and {OUTPUT_CSV}")
+    described = fill_descriptions()
+    if described:
+        print(f"Descriptions saved: {described}")
 
 
 if __name__ == "__main__":

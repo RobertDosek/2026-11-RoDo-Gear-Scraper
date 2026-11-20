@@ -11,6 +11,12 @@ const list = createWatchlist({
     meta: [ad.type, ad.id],
     avail: ad.availability,
   }),
+  saleDefaults: (ad) => ({
+    brand: ad.brand,
+    make: ad.name.startsWith(ad.brand) ? ad.name.slice(ad.brand.length).trim() : ad.name,
+    where_sold: "kytary.cz boutique",
+    description: ad.description,
+  }),
 });
 
 const refreshBtn = document.getElementById("refresh");

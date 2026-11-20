@@ -23,7 +23,7 @@ from bs4 import BeautifulSoup
 
 from . import direct
 from . import hudebnibazar_db as db
-from .common import HEADERS, parse_price
+from .common import HEADERS, block_text, parse_price
 
 PAGE_SIZE = 30                    # ads per listing page on the site
 MAX_PAGES = 150                   # safety stop per category (the biggest has ~70 pages)
@@ -134,24 +134,25 @@ class Scanner:
         finally:
             self._last = time.monotonic()
 
-    def check_page(self, url: str) -> tuple[str, int | None, str]:
-        """(state, price, price text) for one ad page. state is 'gone', 'live' or 'unknown'.
+    def check_page(self, url: str) -> tuple[str, int | None, str, str]:
+        """(state, price, price text, full description) for one ad page. state is 'gone', 'live' or 'unknown'.
 
         A deleted (sold) ad still answers 200, with a page saying "Inzerát byl smazán."; only ad IDs
         that never existed give 404. A live ad page has the detail blocks (description, price)."""
         response = self.get(url)
         if response.status_code in (404, 410):
-            return "gone", None, ""
+            return "gone", None, "", ""
         response.raise_for_status()
         if "byl smazán" in response.text:
-            return "gone", None, ""
+            return "gone", None, "", ""
         soup = BeautifulSoup(response.text, "html.parser")
+        description = block_text(soup.select_one(".detail-desc .InzeratText"))
         price_node = soup.select_one(".InzeratCena")
         if price_node:
-            return ("live", *parse_price_node(price_node))
+            return ("live", *parse_price_node(price_node), description)
         if soup.select_one(".detail-desc"):
-            return "live", None, ""
-        return "unknown", None, ""  # unexpected page: decide nothing, check again later
+            return "live", None, "", description
+        return "unknown", None, "", ""  # unexpected page: decide nothing, check again later
 
     def page_state(self, url: str) -> str:
         return self.check_page(url)[0]
@@ -165,7 +166,7 @@ class Scanner:
         for i, ad in enumerate(ads, 1):
             self.progress(f"Checking your ads: {i} of {len(ads)}")
             try:
-                state, price, price_text = self.check_page(ad["url"])
+                state, price, price_text, description = self.check_page(ad["url"])
             except Exception as e:  # one bad page shouldn't stop the rest
                 errors += 1
                 self.progress(f"Could not check “{ad['title']}”: {e}")
@@ -173,8 +174,11 @@ class Scanner:
             checked += 1
             if state == "gone":
                 gone.append(ad["id"])
-            elif state == "live" and price_text:
-                changed += db.record_price(ad["id"], price, price_text)
+            elif state == "live":
+                if price_text:
+                    changed += db.record_price(ad["id"], price, price_text)
+                if description and ad["status"] in ("watch", "price") and not ad.get("full_description"):
+                    db.set_full_description(ad["id"], description)
         return {"group_slug": None, "mode": "recheck", "checked": checked, "price_changes": changed,
                 "gone_ads": db.mark_gone(gone), "errors": errors,
                 "error": f"{errors} of {len(ads)} ad pages could not be loaded" if errors else None}
@@ -270,6 +274,24 @@ def scan(groups: list[str] | None = None, mode: str = "auto", progress=print) ->
     return results
 
 
+def fill_descriptions(ad_ids: list[str] | None = None, progress=print) -> int:
+    """Save the full description of ads you watch, from their own pages, while they're still up.
+    Runs when you pick Watch / Price under… and after each hourly run for anything missed."""
+    ads = db.ads_missing_description(ad_ids)
+    scanner = Scanner(progress)
+    saved = 0
+    for ad in ads:
+        try:
+            state, _, _, description = scanner.check_page(ad["url"])
+        except Exception as e:
+            progress(f"Could not load the description of {ad['id']}: {e}")
+            continue
+        if state == "live" and description:
+            db.set_full_description(ad["id"], description)
+            saved += 1
+    return saved
+
+
 def recheck(progress=print) -> dict:
     """Check every ad on your lists for price changes and deletions."""
     return Scanner(progress).recheck()
@@ -287,6 +309,9 @@ def main() -> None:
     r = recheck(progress=lambda m: None if m.startswith("Checking your ads") else print(m))
     print(f"  your ads: {r['checked']} checked, {r['price_changes']} price changes, {r['gone_ads']} gone"
           + (f", {r['errors']} failed" if r["errors"] else ""))
+    described = fill_descriptions()
+    if described:
+        print(f"  descriptions saved: {described}")
     try:
         sent = direct.evaluate()
         if sent:

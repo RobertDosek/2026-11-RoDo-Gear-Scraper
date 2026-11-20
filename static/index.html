@@ -28,6 +28,18 @@
       <span class="source-what">Classified ads in six guitar categories, filtered by your keywords.</span>
       <span class="source-stats" id="stats-hudebnibazar"></span>
     </a>
+    <a class="source is-small" data-source="sold" href="/sold/">
+      <span class="source-site">All sources</span>
+      <span class="source-name">Sold</span>
+      <span class="source-what">Gear you watched that got sold, with the price it went for and where.</span>
+      <span class="source-stats" id="stats-sold"></span>
+    </a>
+    <a class="source is-small" data-source="inventory" href="/inventory/">
+      <span class="source-site">Your gear</span>
+      <span class="source-name">Inventory</span>
+      <span class="source-what">What you bought, what it cost, what you want for it, and the profit when it sells.</span>
+      <span class="source-stats" id="stats-inventory"></span>
+    </a>
     <a class="source-extra" href="/hudebnibazar/keywords">Edit hudebnibazar.cz keywords</a>
   </main>
 
@@ -42,7 +54,22 @@
       return s;
     }
     fetch("/api/summary").then((r) => r.json()).then((data) => {
-      for (const [key, s] of Object.entries(data)) {
+      const { sold, inventory, ...sources } = data;
+      if (inventory) {
+        const czk = new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 });
+        const note = document.createElement("span");
+        note.className = "stat-when";
+        note.textContent = inventory.sold ? `Net profit ${czk.format(inventory.net_profit)}` : "Nothing sold yet";
+        document.getElementById("stats-inventory").replaceChildren(
+          stat(inventory.in_stock, " in stock"), stat(czk.format(inventory.stock_cost), " cost"), note);
+      }
+      if (sold) {
+        const last = document.createElement("span");
+        last.className = "stat-when";
+        last.textContent = sold.last ? `Last sold ${when.format(new Date(sold.last))}` : "Nothing recorded yet";
+        document.getElementById("stats-sold").replaceChildren(stat(sold.count, " sold"), stat(sold.priced, " with price"), last);
+      }
+      for (const [key, s] of Object.entries(sources)) {
         const box = document.getElementById(`stats-${key}`);
         const items = [stat(s.new, " new"), stat(s.watching, " watching")];
         if (s.keywords != null) items.push(stat(s.keywords, s.keywords === 1 ? " keyword" : " keywords"));

@@ -15,7 +15,7 @@ import os
 import unicodedata
 from datetime import datetime, timedelta
 
-from .common import BASE_DIR, STATUSES, connect as _connect, now, price_stats
+from .common import BASE_DIR, STATUSES, add_columns, connect as _connect, now, price_stats
 
 DB_PATH = os.environ.get("HUDEBNIBAZAR_DB", os.path.join(BASE_DIR, "hudebnibazar.db"))
 
@@ -97,7 +97,8 @@ CREATE TABLE IF NOT EXISTS ads (
     last_seen      TEXT,
     gone_at        TEXT,
     sold_at        TEXT,
-    note           TEXT
+    note           TEXT,
+    full_description TEXT
 );
 CREATE INDEX IF NOT EXISTS ads_group ON ads (group_slug, listed);
 -- The site lists some ads in several categories, so an ad can belong to several groups.
@@ -140,6 +141,7 @@ def migrate() -> None:
             conn.execute("ALTER TABLE ads ADD COLUMN posted_at TEXT")
         if "note" not in columns:
             conn.execute("ALTER TABLE ads ADD COLUMN note TEXT")
+        add_columns(conn, "ads", {"full_description": "TEXT"})
         kw_columns = {r[1] for r in conn.execute("PRAGMA table_info(keywords)")}
         for name, ddl in (("direct", "TEXT NOT NULL DEFAULT 'off'"), ("direct_max_price", "INTEGER"),
                           ("reply_text", "TEXT"), ("direct_since", "TEXT")):
@@ -472,6 +474,20 @@ def record_price(ad_id: str, price: int | None, price_text: str) -> int:
                      (price, price_text, old["price_czk"], ts, ad_id))
         conn.execute("INSERT INTO price_history VALUES (?, ?, ?)", (ad_id, price, ts))
         return 1
+
+
+def ads_missing_description(ad_ids: list[str] | None = None) -> list[dict]:
+    """Listed ads you watch (or wait on a price for) whose full description isn't saved yet.
+    The listing only shows the first ~100 characters; the whole text is on the ad's own page."""
+    with connect() as conn:
+        rows = conn.execute("SELECT id, url FROM ads WHERE status IN ('watch','price') AND listed=1 "
+                            "AND full_description IS NULL").fetchall()
+    return [dict(r) for r in rows if ad_ids is None or r["id"] in ad_ids]
+
+
+def set_full_description(ad_id: str, text: str) -> None:
+    with connect() as conn:
+        conn.execute("UPDATE ads SET full_description=? WHERE id=?", (text, ad_id))
 
 
 def mark_gone(ad_ids: list[str]) -> int:

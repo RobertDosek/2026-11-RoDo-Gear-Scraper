@@ -6,6 +6,7 @@
      filter(ad)   - optional, extra filter (e.g. category) applied before grouping
      emptyText    - shown when nothing has been scraped yet
      afterRender  - optional, called with the groups after each render
+     saleDefaults(ad) - optional, { brand, make, where_sold, description } to pre-fill the "Move to sold" form
 */
 
 const czk = new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 });
@@ -46,7 +47,7 @@ function el(tag, className, text) {
 }
 
 function createWatchlist(config) {
-  const state = { ads: [], lastRun: null, tab: "watching" };
+  const state = { ads: [], lastRun: null, tab: "watching", soldIds: new Set() };
   const panel = document.getElementById("panel");
   const rowTpl = document.getElementById("row-tpl");
   const filter = config.filter || (() => true);
@@ -71,6 +72,7 @@ function createWatchlist(config) {
     const data = await api(`${config.api}/ads`);
     state.ads = data.ads;
     state.lastRun = data.last_run;
+    state.soldIds = new Set(data.sold_ids || []);
     if (config.onLoad) config.onLoad(data);
     render();
     return data;
@@ -274,18 +276,116 @@ function createWatchlist(config) {
     if (ad.status === "sold") {
       if (ad.listed) wrap.append(choice(ad, name));
       else wrap.append(el("span", "ad-meta", `Sold ${ad.sold_at ? when.format(new Date(ad.sold_at)) : ""}`));
+      if (state.soldIds.has(ad.id)) {
+        const a = el("a", "btn-link", "In your sold list");
+        a.href = "/sold/";
+        wrap.append(a);
+      } else if (!ad.listed) {
+        wrap.append(saleButton(ad, "Record sale", "btn-link"));
+      }
       return wrap;
     }
     if (gone) {
-      const btn = el("button", "btn-plain", "Move to sold");
-      btn.type = "button";
-      btn.addEventListener("click", () => setStatus(ad, "sold"));
-      wrap.append(btn);
+      wrap.append(saleButton(ad, "Move to sold", "btn-plain"));
       return wrap;
     }
     wrap.append(choice(ad, name));
     if (ad.status === "price") wrap.append(targetForm(ad));
     return wrap;
+  }
+
+  /* ---------- move to sold: record brand, make, sold price and where it sold ---------- */
+
+  function saleButton(ad, label, cls) {
+    const btn = el("button", cls, label);
+    btn.type = "button";
+    btn.addEventListener("click", () => {
+      const stack = btn.closest(".controls-stack");
+      if (!stack.querySelector(".sale")) stack.append(saleForm(ad));
+      stack.querySelector(".sale input").focus();
+    });
+    return btn;
+  }
+
+  function saleField(form, key, label, input) {
+    const id = `sale-${key}-${ad_key(form)}`;
+    const wrap = el("label", `sale-field sale-${key}`);
+    wrap.htmlFor = id;
+    wrap.append(el("span", "sale-label", label), input);
+    input.id = id;
+    input.name = key;
+    return wrap;
+  }
+  const ad_key = (form) => form.dataset.ad.replace(/[^A-Za-z0-9_-]/g, "_");
+
+  function saleForm(ad) {
+    const d = config.describe(ad);
+    const pre = config.saleDefaults ? config.saleDefaults(ad) : { brand: d.lead, make: d.rest };
+    const form = el("form", "sale");
+    form.dataset.ad = ad.id;
+    form.append(el("p", "sale-title", "Move to your sold list"));
+
+    const text = (value, extra = {}) => Object.assign(el("input"), { type: "text", value: value || "", maxLength: 200, ...extra });
+    const price = Object.assign(el("input"), { type: "number", min: 0, step: 1, inputMode: "numeric",
+      placeholder: ad.price_czk != null ? `asked ${czk.format(ad.price_czk)}` : "Kč" });
+    const where = text(pre.where_sold || config.siteName);
+    where.setAttribute("list", "sale-where-options");
+    // The note starts as your own note on the ad, then the ad's description (saved when you watched it).
+    const startNote = [ad.note, pre.description].filter(Boolean).join("\n\n").slice(0, 10000);
+    const note = Object.assign(el("textarea"), { rows: startNote ? 5 : 2, maxLength: 10000, value: startNote,
+      placeholder: "e.g. went fast, sold to a dealer" });
+    form.append(
+      saleField(form, "brand", "Brand", text(pre.brand)),
+      saleField(form, "make", "Make", text(pre.make)),
+      saleField(form, "sold_price", "Sold price (Kč)", price),
+      saleField(form, "where_sold", "Where sold", where),
+      saleField(form, "note", "Note", note),
+    );
+    if (!document.getElementById("sale-where-options")) {
+      const list = el("datalist");
+      list.id = "sale-where-options";
+      for (const v of ["hudebnibazar.cz", "kytary.cz boutique", "bazos.cz", "Facebook Marketplace", "sbazar.cz", "Reverb"])
+        list.append(Object.assign(el("option"), { value: v }));
+      document.body.append(list);
+    }
+
+    const actions = el("div", "sale-actions");
+    const save = el("button", "btn-plain btn-save", "Save to sold");
+    save.type = "submit";
+    const cancel = el("button", "btn-link", "Cancel");
+    cancel.type = "button";
+    cancel.addEventListener("click", () => form.remove());
+    actions.append(save, cancel);
+    form.append(actions);
+
+    form.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") form.remove();
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) form.requestSubmit();
+    });
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      save.disabled = true;
+      const body = Object.fromEntries(["brand", "make", "sold_price", "where_sold", "note"].map((k) => [k, form.elements[k].value]));
+      const before = { status: ad.status, target_price: ad.target_price };
+      const soldUrl = `${config.api}/ads/${encodeURIComponent(ad.id)}/sold`;
+      try {
+        const r = await api(soldUrl, { method: "POST", body: JSON.stringify(body) });
+        if (r.ad) Object.assign(ad, r.ad); else ad.status = "sold";
+        state.soldIds.add(ad.id);
+        render(ad.id);
+        const price = r.sold.sold_price != null ? ` for ${czk.format(r.sold.sold_price)}` : "";
+        showToast(`Moved to sold${price}: ${d.name}`, async () => {
+          await api(soldUrl, { method: "DELETE" });
+          state.soldIds.delete(ad.id);
+          Object.assign(ad, await api(`${config.api}/ads/${encodeURIComponent(ad.id)}`, { method: "POST", body: JSON.stringify(before) }));
+          render(ad.id);
+        });
+      } catch (err) {
+        save.disabled = false;
+        showToast(`Could not move to sold: ${err.message}`, null, true);
+      }
+    });
+    return form;
   }
 
   function choice(ad, name) {

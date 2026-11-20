@@ -2,7 +2,7 @@
 
 import os
 
-from .common import BASE_DIR, STATUSES, connect as _connect, now, price_stats
+from .common import BASE_DIR, STATUSES, add_columns, connect as _connect, now, price_stats
 
 DB_PATH = os.environ.get("KYTARY_DB", os.path.join(BASE_DIR, "kytary.db"))
 
@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS ads (
     first_seen     TEXT,
     last_seen      TEXT,
     gone_at        TEXT,
-    sold_at        TEXT
+    sold_at        TEXT,
+    description    TEXT
 );
 CREATE TABLE IF NOT EXISTS price_history (
     ad_id     TEXT NOT NULL REFERENCES ads(id),
@@ -42,6 +43,24 @@ CREATE TABLE IF NOT EXISTS runs (
 
 def connect():
     return _connect(DB_PATH, SCHEMA)
+
+
+with connect() as _conn:  # databases from before descriptions were kept
+    add_columns(_conn, "ads", {"description": "TEXT"})
+
+
+def ads_missing_description(ad_ids: list[str] | None = None) -> list[dict]:
+    """Listed guitars you watch (or wait on a price for) whose description isn't saved yet.
+    The listing has no description; it's on the guitar's own page, which goes away when it sells."""
+    with connect() as conn:
+        rows = conn.execute("SELECT id, url FROM ads WHERE status IN ('watch','price') AND listed=1 "
+                            "AND description IS NULL").fetchall()
+    return [dict(r) for r in rows if ad_ids is None or r["id"] in ad_ids]
+
+
+def set_description(ad_id: str, text: str) -> None:
+    with connect() as conn:
+        conn.execute("UPDATE ads SET description=? WHERE id=?", (text, ad_id))
 
 
 def sync(ads: list[dict]) -> dict:

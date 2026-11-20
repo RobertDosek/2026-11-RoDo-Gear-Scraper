@@ -10,6 +10,14 @@ const DIRECT_TEXT = {
   replied: "answered", dry_run: "answer (dry run)", skipped: "skipped", failed: "answer failed",
 };
 
+// Brands to spot in ad titles when moving an ad to sold. Longer names first ("Gibson Custom" before "Gibson").
+const KNOWN_BRANDS = ["Squier", "Fender", "Gibson", "Epiphone", "PRS", "Ibanez", "Gretsch", "Rickenbacker", "Jackson",
+  "ESP", "LTD", "Schecter", "Yamaha", "Martin", "Taylor", "Guild", "Takamine", "Washburn", "Charvel", "G&L", "Music Man",
+  "Sterling", "Duesenberg", "Hagstrom", "Harley Benton", "Cort", "Godin", "Larrivee", "Furch", "Lowden", "Eastman",
+  "Marshall", "Vox", "Orange", "Mesa Boogie", "Mesa", "Peavey", "Fractal", "Kemper", "Boss", "Strymon", "Electro-Harmonix",
+  "MXR", "Seymour Duncan", "DiMarzio", "EMG", "Jolana", "Grover", "Gotoh", "Schaller", "Hiwatt", "Laney", "Blackstar",
+  "Two Rock", "Friedman", "Bogner", "Supro", "Danelectro", "Burny", "Fernandes", "Tokai", "Greco"];
+
 const list = createWatchlist({
   api: "/api/hudebnibazar",
   siteName: "hudebnibazar.cz",
@@ -25,6 +33,20 @@ const list = createWatchlist({
     avail: ad.posted ? `Posted ${ad.posted}` : "",
     noPrice: ad.price_text || "No price",
   }),
+  // A first guess you can correct: a known brand anywhere in the title, else the title's first word.
+  // The description is the whole text from the ad's page, saved when you watched it; before that is
+  // saved, the ~100-character start from the listing.
+  saleDefaults: (ad) => {
+    const description = ad.full_description || ad.description || "";
+    const title = (ad.title || "").trim();
+    const known = KNOWN_BRANDS.find((b) => new RegExp(`(^|[^\\p{L}])${b}([^\\p{L}]|$)`, "iu").test(title));
+    if (known) {
+      const make = title.replace(new RegExp(known, "i"), " ").replace(/\s+/g, " ").trim();
+      return { brand: known, make, description };
+    }
+    const [brand, ...rest] = title.split(/\s+/);
+    return { brand, make: rest.join(" "), description };
+  },
   onLoad: (data) => {
     groupList = data.groups;
     groupNames = Object.fromEntries(data.groups.map((g) => [g.slug, g.name]));

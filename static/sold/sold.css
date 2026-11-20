@@ -1,0 +1,113 @@
+/* Sold page: a wide, dense table. Rows stay one line high; the picture shows on hover. */
+
+.sold-totals {
+  grid-column: 2; grid-row: 2 / span 2; align-self: end;
+  margin: 0; display: flex; gap: 8px 28px; flex-wrap: wrap; justify-content: flex-end;
+}
+.sold-totals div { display: flex; flex-direction: column; align-items: flex-end; }
+.sold-totals dt { font-size: .8125rem; color: var(--band-soft); }
+.sold-totals dd { margin: 0; font-size: 1.375rem; font-weight: 750; font-variant-numeric: tabular-nums; }
+
+.sold-filters, .sold-panel { max-width: 1400px; margin: 0 auto; padding-left: 24px; padding-right: 24px; }
+.sold-filters {
+  padding-top: 18px; padding-bottom: 14px;
+  display: flex; flex-wrap: wrap; align-items: end; gap: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.sf { display: flex; flex-direction: column; gap: 2px; font-size: .75rem; font-weight: 600; color: var(--ink-soft); }
+.sf input, .sf select {
+  font: inherit; font-size: .875rem; font-weight: 400; color: var(--ink);
+  padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
+  min-width: 0;
+}
+.sf-q input { width: 240px; }
+.sf select { max-width: 180px; }
+.sf-num input { width: 100px; font-variant-numeric: tabular-nums; }
+.sf-check { display: flex; align-items: center; gap: 6px; font-size: .875rem; color: var(--ink-soft); padding-bottom: 7px; cursor: pointer; }
+.sf-check input { accent-color: var(--ink); width: 16px; height: 16px; margin: 0; }
+.sold-filters .btn-link { padding-bottom: 8px; }
+
+.sold-panel { padding-top: 8px; padding-bottom: 96px; }
+.sold-scroll { overflow-x: auto; }
+.sold-table { width: 100%; border-collapse: collapse; font-size: .875rem; font-variation-settings: "wdth" 88; }
+.sold-table th {
+  text-align: left; font-size: .75rem; font-weight: 600; color: var(--ink-soft);
+  border-bottom: 1px solid var(--line); padding: 0; white-space: nowrap;
+  position: sticky; top: 0; background: var(--paper);
+}
+.sold-table th button {
+  font: inherit; color: inherit; background: none; border: 0; cursor: pointer;
+  padding: 12px 8px 6px; width: 100%; text-align: inherit;
+}
+.sold-table th button:hover { color: var(--ink); }
+.sold-table th[aria-sort] { color: var(--ink); }
+.sold-table th[aria-sort="ascending"] button::after { content: " ↑"; }
+.sold-table th[aria-sort="descending"] button::after { content: " ↓"; }
+.sold-table .num { text-align: right; }
+
+.sold-table td {
+  padding: 7px 8px; border-bottom: 1px solid var(--line);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sold-table tbody tr:hover { background: var(--surface); }
+.sold-table td.num { font-variant-numeric: tabular-nums; }
+
+/* Column widths (fixed layout: set on the header). Text shrinks with an ellipsis, numbers never do. */
+.sold-table { table-layout: fixed; min-width: 900px; }
+.sold-table th:nth-child(1) { width: 92px; }   /* Sold */
+.sold-table th:nth-child(2) { width: 10%; }    /* Brand */
+.sold-table th:nth-child(3) { width: auto; }   /* Make */
+.sold-table th:nth-child(4) { width: 12%; }    /* Category */
+.sold-table th:nth-child(5) { width: 11%; }    /* Where sold */
+.sold-table th:nth-child(6) { width: 100px; }  /* Sold for */
+.sold-table th:nth-child(7) { width: 24%; }    /* Note */
+.sold-table th:nth-child(8) { width: 52px; }   /* Edit */
+.c-date, .c-cat, .c-note { color: var(--ink-soft); }
+.c-note { cursor: default; }
+.c-brand, .c-sold { font-weight: 750; }
+.c-actions { text-align: right; }
+.c-actions .btn-quiet { padding: 2px 6px; }
+.c-make a { color: inherit; text-decoration: none; }
+.c-make a:hover { text-decoration: underline; }
+.has-pic { color: var(--ink-soft); font-size: .75rem; }
+
+/* Hover picture */
+.sold-preview {
+  position: fixed; left: 0; top: 0; z-index: 10; pointer-events: none;
+  width: 260px; height: 260px; padding: 6px;
+  background: var(--surface); border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(27,30,35,.25);
+}
+.sold-preview[hidden] { display: none; }
+.sold-preview img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+/* Hover note: the whole text, line breaks kept */
+.sold-note-preview {
+  position: fixed; left: 0; top: 0; z-index: 10; pointer-events: none;
+  width: min(440px, calc(100vw - 32px)); max-height: min(60vh, 480px); overflow: hidden;
+  padding: 12px 14px;
+  background: var(--surface); border-radius: 8px; border-left: 3px solid var(--brass);
+  box-shadow: 0 10px 30px rgba(27,30,35,.25);
+  font-size: .875rem; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.sold-note-preview[hidden] { display: none; }
+
+/* Editor dialog */
+.sold-editor { border: 0; border-radius: 10px; padding: 20px 22px; width: min(520px, calc(100vw - 32px)); box-shadow: 0 16px 40px rgba(27,30,35,.3); }
+.sold-editor::backdrop { background: rgba(27,30,35,.4); }
+.sold-editor h2 { margin: 0; font-size: 1.25rem; font-variation-settings: "wdth" 112; }
+.sold-editor-ad { margin: 2px 0 14px; color: var(--ink-soft); font-size: .875rem; }
+.sold-editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+.sold-editor-grid input, .sold-editor-grid textarea {
+  width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); font: inherit; font-size: .9375rem;
+}
+.sold-editor-actions { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
+.sold-editor-actions .btn-danger { margin-left: auto; }
+
+@media (max-width: 860px) {
+  .sold-totals { grid-column: 1; grid-row: auto; justify-content: flex-start; margin-top: 16px; }
+  .sold-totals div { align-items: flex-start; }
+  .sold-filters, .sold-panel { padding-left: 16px; padding-right: 16px; }
+  .sf-q { width: 100%; }
+  .sf-q input { width: 100%; }
+}
